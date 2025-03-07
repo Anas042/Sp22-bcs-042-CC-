@@ -1,0 +1,235 @@
+Task 1:
+
+using System;
+using System.IO;
+using System.Text;
+
+class TwoBufferLexicalAnalyzer
+{
+    private const int BUFFER_SIZE = 1024; 
+    private char[] buffer1 = new char[BUFFER_SIZE];
+    private char[] buffer2 = new char[BUFFER_SIZE];
+    private int bufferPointer = 0;
+    private bool firstBufferActive = true;
+    private StringReader reader; 
+    private char currentChar;
+
+    public TwoBufferLexicalAnalyzer(string inputString) 
+    {
+        reader = new StringReader(inputString); 
+        LoadBuffer();
+    }
+
+    private void LoadBuffer()
+    {
+        char[] activeBuffer = firstBufferActive ? buffer1 : buffer2;
+        int bytesRead = reader.Read(activeBuffer, 0, BUFFER_SIZE);
+
+        if (bytesRead < BUFFER_SIZE)
+        {
+            activeBuffer[bytesRead] = '\0'; 
+        }
+        bufferPointer = 0;
+        firstBufferActive = !firstBufferActive; 
+    }
+    private char GetNextChar()
+    {
+        char[] activeBuffer = firstBufferActive ? buffer2 : buffer1; 
+        if (bufferPointer >= BUFFER_SIZE || activeBuffer[bufferPointer] == '\0')
+        {
+            LoadBuffer(); 
+            activeBuffer = firstBufferActive ? buffer2 : buffer1;
+        }
+
+        return activeBuffer[bufferPointer++];
+    }
+
+    public void Tokenize()
+    {
+        while ((currentChar = GetNextChar()) != '\0')
+        {
+            if (char.IsWhiteSpace(currentChar))
+                continue;
+
+            if (char.IsLetter(currentChar)) 
+            {
+                string identifier = ReadIdentifier();
+                Console.WriteLine($"IDENTIFIER: {identifier}");
+            }
+            else if (char.IsDigit(currentChar)) 
+            {
+                string number = ReadNumber();
+                Console.WriteLine($"NUMBER: {number}");
+            }
+            else 
+            {
+                Console.WriteLine($"SYMBOL: {currentChar}");
+            }
+        }
+    }
+
+    private string ReadIdentifier()
+    {
+        StringBuilder sb = new StringBuilder();
+        sb.Append(currentChar);
+        while (char.IsLetterOrDigit(currentChar = GetNextChar()))
+        {
+            sb.Append(currentChar);
+        }
+        return sb.ToString();
+    }
+
+    private string ReadNumber()
+    {
+        StringBuilder sb = new StringBuilder();
+        sb.Append(currentChar);
+        while (char.IsDigit(currentChar = GetNextChar()))
+        {
+            sb.Append(currentChar);
+        }
+        return sb.ToString();
+    }
+
+    public void Close()
+    {
+        reader.Dispose(); 
+    }
+}
+
+class Program
+{
+    static void Main()
+    {
+        string inputString = "variable1 = 123 + symbol2;"; 
+        TwoBufferLexicalAnalyzer lexer = new TwoBufferLexicalAnalyzer(inputString);
+        lexer.Tokenize();
+        lexer.Close();
+    }
+}
+
+
+
+Task 2:
+
+using System;
+using System.Collections.Generic;
+
+class SymbolEntry
+{
+    public string Identifier { get; set; }
+    public string DataType { get; set; }
+    public int Scope { get; set; }
+    public string AssignedValue { get; set; }
+
+    public SymbolEntry(string identifier, string dataType, int scope, string assignedValue = "")
+    {
+        Identifier = identifier;
+        DataType = dataType;
+        Scope = scope;
+        AssignedValue = assignedValue;
+    }
+
+    public override string ToString()
+    {
+        return $"Identifier: {Identifier}, Data Type: {DataType}, Scope Level: {Scope}, Value: {AssignedValue}";
+    }
+}
+
+class SymbolRegistry
+{
+    private Dictionary<int, List<SymbolEntry>> registry;
+    private const int Capacity = 100;
+
+    public SymbolRegistry()
+    {
+        registry = new Dictionary<int, List<SymbolEntry>>();
+    }
+    private int ComputeHash(string key)
+    {
+        int sum = 0;
+        foreach (char character in key)
+        {
+            sum += character;
+        }
+        return sum % Capacity;
+    }
+    public void AddEntry(string identifier, string dataType, int scope, string assignedValue = "")
+    {
+        int location = ComputeHash(identifier);
+
+        if (!registry.ContainsKey(location))
+        {
+            registry[location] = new List<SymbolEntry>();
+        }
+        foreach (var entry in registry[location])
+        {
+            if (entry.Identifier == identifier && entry.Scope == scope)
+            {
+                Console.WriteLine($"Error: '{identifier}' already declared in scope {scope}.");
+                return;
+            }
+        }
+
+        registry[location].Add(new SymbolEntry(identifier, dataType, scope, assignedValue));
+        Console.WriteLine($"Added: {identifier} -> Type: {dataType}, Scope: {scope}, Value: {assignedValue}");
+    }
+    public SymbolEntry FindEntry(string identifier)
+    {
+        int location = ComputeHash(identifier);
+
+        if (registry.ContainsKey(location))
+        {
+            foreach (var entry in registry[location])
+            {
+                if (entry.Identifier == identifier)
+                    return entry;
+            }
+        }
+        return null;
+    }
+    public void RemoveEntry(string identifier)
+    {
+        int location = ComputeHash(identifier);
+
+        if (registry.ContainsKey(location))
+        {
+            registry[location].RemoveAll(entry => entry.Identifier == identifier);
+            Console.WriteLine($"Removed: {identifier}");
+        }
+        else
+        {
+            Console.WriteLine($"Warning: '{identifier}' not found.");
+        }
+    }
+    public void ShowTable()
+    {
+        Console.WriteLine("\n=== Symbol Registry ===");
+        foreach (var slot in registry)
+        {
+            foreach (var entry in slot.Value)
+            {
+                Console.WriteLine(entry);
+            }
+        }
+    }
+}
+
+class MainProgram
+{
+    static void Main()
+    {
+        SymbolRegistry symbols = new SymbolRegistry();
+        symbols.AddEntry("a", "int", 1, "100");
+        symbols.AddEntry("b", "double", 1, "45.7");
+        symbols.AddEntry("compute", "function", 0);
+        symbols.AddEntry("a", "int", 2, "200");
+        symbols.ShowTable();
+        
+        Console.WriteLine("\nSearching for 'a':");
+        SymbolEntry result = symbols.FindEntry("a");
+        Console.WriteLine(result != null ? result.ToString() : "Not Found");
+        
+        symbols.RemoveEntry("b");
+        symbols.ShowTable();
+    }
+}
